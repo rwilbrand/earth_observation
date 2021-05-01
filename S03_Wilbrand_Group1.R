@@ -12,6 +12,7 @@ starttime <- Sys.time()
 library(raster)
 library(terra) # Supposedly an evolution of the raster package, trying it out
 library(tidyverse)
+library(magrittr) # for pipe-friendly aliases to common operations
 
 # Set working directory------------------------------------------------------
 setwd("C:/MSc GCG/2021_SoSe/EO/gcg_eo_s03")
@@ -23,7 +24,7 @@ setwd("C:/MSc GCG/2021_SoSe/EO/gcg_eo_s03")
 # Read in data---------------------------------------------------------------
 pathToMarch <- dir(recursive = T, pattern = "201403")
 marchStack <- rast(pathToMarch) # -> terra's SpatRaster format
-marchStack[marchStack < 0] <- NA
+marchStack[marchStack == -32768] <- NA
 
 # Define correction factors--------------------------------------------------
 landsatCorrectionFactors <- c(2.5, 6, 7.5, 10000)
@@ -47,15 +48,19 @@ EVI <- function(ras, nIR, red, blue, correctionFactors){
 }
 
 # Calculate EVI and NDVI for March image-------------------------------------
-eviMarch <- round(10000*EVI(marchStack, 4, 3, 1, landsatCorrectionFactors))
-ndviMarch <- round(10000*NDVI(marchStack, 4, 3))
+eviMarch <- EVI(marchStack, 4, 3, 1, landsatCorrectionFactors) %>% 
+  clamp(-1, 1, values = F) %>%
+  multiply_by(10000)
+ndviMarch <- NDVI(marchStack, 4, 3) %>% 
+  clamp(-1, 1, values = F) %>%
+  multiply_by(10000)
 
 # Write rasters to disk------------------------------------------------------
 if (!dir.exists("spectral_indices")) dir.create("spectral_indices")
 if (!file.exists("spectral_indices/EVI_March2014.tif")){
   writeRaster(eviMarch, "spectral_indices/EVI_March2014.tif",
               filetype = "GTiff", datatype = 'INT2S')}
-if (!file.exists("spectral_indices/EVI_March2014.tif")){
+if (!file.exists("spectral_indices/NDVI_March2014.tif")){
   writeRaster(ndviMarch, "spectral_indices/NDVI_March2014.tif",
               filetype = "GTiff", datatype = 'INT2S')}
 
@@ -93,5 +98,4 @@ tcStack %>% stretch(minq = 0.01, maxq = 0.99) %>% plotRGB
 (elapsed <- Sys.time() - starttime)
 
 # EOF
-
 
