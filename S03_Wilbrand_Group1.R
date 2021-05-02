@@ -6,9 +6,11 @@
 #############################################################################
 # 0) Setup
 #############################################################################
+# Start timing of script-----------------------------------------------------
 starttime <- Sys.time()
 
 # Load necessary libraries---------------------------------------------------
+library(rgdal)
 library(raster)
 library(terra) # Supposedly an evolution of the raster package, trying it out
 library(tidyverse)
@@ -25,6 +27,7 @@ setwd("C:/MSc GCG/2021_SoSe/EO/gcg_eo_s03")
 pathToMarch <- dir(recursive = T, pattern = "201403")
 marchStack <- rast(pathToMarch) # -> terra's SpatRaster format
 marchStack[marchStack == -32768] <- NA
+names(marchStack) <- c("blue", "green", "red", "nir", "swir1", "swir2")
 
 # Define correction factors--------------------------------------------------
 landsatCorrectionFactors <- c(2.5, 6, 7.5, 10000)
@@ -92,10 +95,66 @@ if (!file.exists("spectral_indices/TasseledCap_March2014.tif")){
 tcStack %>% stretch(minq = 0.01, maxq = 0.99) %>% plotRGB
 
 #############################################################################
-# 3)    
+# 3) Explore  the training data
 #############################################################################
 
+# Read in training points----------------------------------------------------
+trainConifer <- readOGR(getwd(), "Coniferous_training")
+
+# Change SpatRaster to Raster for easier processing--------------------------
+marchStack2 <- as(marchStack, "Raster")
+names(marchStack2) <- names(marchStack)
+
+# Extract raster values at training point locations--------------------------
+trainValues <- raster::extract(marchStack2, trainConifer, sp = T)
+
+# Convert to tibble and classID to factor------------------------------------
+trainTibble <- 
+  trainValues %>%
+  as_tibble %>%
+  mutate(across(classID, as.factor))
+
+# Pivot to long format-------------------------------------------------------
+trainLong <-
+  trainTibble %>% 
+  pivot_longer(blue:swir2,
+               names_to = "band",
+               values_to = "reflectance")
+
+# Create boxplots of spectral bands per class--------------------------------
+ggplot(trainLong, aes(band, reflectance, color=classID)) +
+  geom_boxplot() +
+  theme_bw()
+
+# Convert raster to tibble, remove NAs, sample 100k points-------------------
+set.seed(5678)
+marchSample <-
+  values(marchStack) %>% 
+  as_tibble %>% 
+  na.omit %>% 
+  slice_sample(n = 1e5)
+  
+# Specify which bands to use for the x and y axis of the plot----------------
+xband <- "red"
+yband <- "nir"
+
+# Create plot of band value density and training data------------------------
+ggplot() + 
+  geom_hex(marchSample, mapping = aes(get(xband), get(yband)), bins = 100) + 
+  geom_point(trainTibble, mapping = aes(get(xband), get(yband),
+                                        color=classID, shape=classID), 
+             size = 2, inherit.aes = FALSE, alpha=1) + 
+  
+  scale_fill_gradientn(colours=c("black","white"), na.value=NA) + 
+  scale_x_continuous(xband, limits=c(-10, quantile(marchSample[xband],
+                                                   0.98, na.rm=T))) +
+  scale_y_continuous(yband, limits=c(-10, quantile(marchSample[yband],
+                                                   0.98, na.rm=T))) +
+  scale_color_manual(values=c("red", "blue", "green", "purple")) +
+  theme_bw()
+
+
+# Print out total script execution time--------------------------------------
 (elapsed <- Sys.time() - starttime)
 
 # EOF
-
