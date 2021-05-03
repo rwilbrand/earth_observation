@@ -95,18 +95,18 @@ if (!file.exists("spectral_indices/TasseledCap_March2014.tif")){
 tcStack %>% stretch(minq = 0.01, maxq = 0.99) %>% plotRGB
 
 #############################################################################
-# 3) Explore  the training data
+# 3) Explore the training data
 #############################################################################
 
 # Read in training points----------------------------------------------------
-trainConifer <- readOGR(getwd(), "Coniferous_training")
+trainComplete <- readOGR("train_new", "train_new")
 
 # Change SpatRaster to Raster for easier processing--------------------------
 marchStack2 <- as(marchStack, "Raster")
 names(marchStack2) <- names(marchStack)
 
 # Extract raster values at training point locations--------------------------
-trainValues <- raster::extract(marchStack2, trainConifer, sp = T)
+trainValues <- raster::extract(marchStack2, trainComplete, sp = T)
 
 # Convert to tibble and classID to factor------------------------------------
 trainTibble <- 
